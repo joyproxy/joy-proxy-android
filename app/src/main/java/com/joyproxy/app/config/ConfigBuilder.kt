@@ -24,13 +24,13 @@ object ConfigBuilder {
                         put("type", "tun")
                         put("tag", "tun-in")
                         put("interface_name", "tun0")
-                        put("inet4_address", "172.19.0.1/30")
+                        putJsonArray("address") {
+                            add(JsonPrimitive("172.19.0.1/30"))
+                        }
                         put("mtu", 9000)
                         put("auto_route", true)
                         put("strict_route", true)
                         put("stack", "system")
-                        put("sniff", true)
-                        put("sniff_override_destination", true)
                     },
                 )
             }
@@ -66,6 +66,7 @@ object ConfigBuilder {
                         buildJsonObject {
                             put("protocol", "udp")
                             put("port", 443)
+                            put("action", "route")
                             put("outbound", "block")
                         },
                     )
