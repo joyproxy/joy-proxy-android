@@ -11,7 +11,7 @@ Android 代理 IP 工具，基于 sing-box `libbox` + `VpnService` 实现。
 
 ## 编译
 
-本项目依赖 `libbox.aar`（sing-box 核心），不在仓库中直接提交。GitHub Actions 会在编译时自动从 sing-box v1.11.8 构建。
+本项目依赖 `libbox.aar`（sing-box 核心），不在仓库中直接提交。GitHub Actions 会在编译时自动从 sing-box v1.13.13 构建。
 
 ### 本地编译
 
@@ -19,10 +19,10 @@ Android 代理 IP 工具，基于 sing-box `libbox` + `VpnService` 实现。
 2. 构建 libbox：
 
 ```bash
-git clone --depth 1 --branch v1.11.8 https://github.com/SagerNet/sing-box.git
+git clone --depth 1 --branch v1.13.13 https://github.com/SagerNet/sing-box.git
 cd sing-box
-go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.7
-go install github.com/sagernet/gomobile/cmd/gobind@v0.1.7
+go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
 export PATH="$(go env GOPATH)/bin:$PATH"
 gomobile init
 go run ./cmd/internal/build_libbox/main.go -target android

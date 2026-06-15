@@ -6,7 +6,6 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
-import android.util.Log
 import androidx.annotation.RequiresApi
 import io.nekohasekai.libbox.ConnectionOwner
 import io.nekohasekai.libbox.InterfaceUpdateListener
@@ -14,6 +13,7 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LocalDNSTransport
 import io.nekohasekai.libbox.NetworkInterfaceIterator
 import io.nekohasekai.libbox.PlatformInterface
+import io.nekohasekai.libbox.RoutePrefix
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.WIFIState
@@ -174,7 +174,5 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         }
 }
 
-fun String.toIpPrefix(): IpPrefix {
-    val parts = split("/")
-    return IpPrefix(java.net.InetAddress.getByName(parts[0]), parts[1].toInt())
-}
+fun RoutePrefix.toIpPrefix(): IpPrefix =
+    IpPrefix(java.net.InetAddress.getByName(address()), prefix())
