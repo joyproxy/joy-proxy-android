@@ -47,7 +47,7 @@ class SettingsRepository(private val context: Context) {
             dnsMode = runCatching { DnsMode.valueOf(prefs[Keys.DNS_MODE] ?: DnsMode.FAKE_IP.name) }
                 .getOrDefault(DnsMode.FAKE_IP),
             customDns = prefs[Keys.CUSTOM_DNS] ?: "223.5.5.5",
-            dohUrl = prefs[Keys.DOH_URL] ?: "https://dns.google/dns-query",
+            dohUrl = prefs[Keys.DOH_URL] ?: "https://dns.alidns.com/dns-query",
             connected = prefs[Keys.CONNECTED] ?: false,
         )
     }

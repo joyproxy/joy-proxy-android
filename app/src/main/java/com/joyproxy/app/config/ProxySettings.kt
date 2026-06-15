@@ -28,7 +28,7 @@ data class ProxySettings(
     val selectedApps: Set<String> = emptySet(),
     val dnsMode: DnsMode = DnsMode.FAKE_IP,
     val customDns: String = "223.5.5.5",
-    val dohUrl: String = "https://dns.google/dns-query",
+    val dohUrl: String = "https://dns.alidns.com/dns-query",
     val connected: Boolean = false,
 ) {
     fun isValid(): Boolean = host.isNotBlank() && port in 1..65535

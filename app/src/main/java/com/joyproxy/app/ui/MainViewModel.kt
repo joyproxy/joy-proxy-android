@@ -8,27 +8,58 @@ import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
 import com.joyproxy.app.data.SettingsRepository
+import com.joyproxy.app.network.ProxyTester
 import com.joyproxy.app.vpn.VpnController
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class ProxyTestStatus {
+    Idle,
+    Testing,
+    Success,
+    Failed,
+}
+
+data class ProxyTestState(
+    val status: ProxyTestStatus = ProxyTestStatus.Idle,
+    val message: String = "",
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
+    private var saveJob: Job? = null
 
-    val settings: StateFlow<ProxySettings> =
-        repository.settings.stateIn(viewModelScope, SharingStarted.Eagerly, ProxySettings())
+    private val _settings = MutableStateFlow(ProxySettings())
+    val settings: StateFlow<ProxySettings> = _settings.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
-    fun update(block: (ProxySettings) -> ProxySettings) {
+    private val _testState = MutableStateFlow(ProxyTestState())
+    val testState: StateFlow<ProxyTestState> = _testState.asStateFlow()
+
+    init {
         viewModelScope.launch {
-            repository.save(block(settings.value))
+            _settings.value = repository.settings.first()
         }
+    }
+
+    private fun update(block: (ProxySettings) -> ProxySettings) {
+        val updated = block(_settings.value)
+        _settings.value = updated
+        saveJob?.cancel()
+        saveJob =
+            viewModelScope.launch {
+                delay(400)
+                repository.save(updated)
+            }
     }
 
     fun setProtocol(protocol: ProxyProtocol) = update { it.copy(protocol = protocol) }
@@ -42,8 +73,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setCustomDns(dns: String) = update { it.copy(customDns = dns) }
     fun setDohUrl(url: String) = update { it.copy(dohUrl = url) }
 
+    fun testProxy() {
+        val current = _settings.value
+        if (!current.isValid()) {
+            _testState.value = ProxyTestState(ProxyTestStatus.Failed, "请先填写有效的代理地址和端口")
+            return
+        }
+
+        viewModelScope.launch {
+            _testState.value = ProxyTestState(ProxyTestStatus.Testing, "正在测试代理连通性…")
+            val result = ProxyTester.test(current)
+            _testState.value =
+                ProxyTestState(
+                    status = if (result.success) ProxyTestStatus.Success else ProxyTestStatus.Failed,
+                    message = result.message,
+                )
+        }
+    }
+
     fun connect(onNeedPermission: () -> Unit) {
-        val current = settings.value
+        val current = _settings.value
         if (!current.isValid()) {
             _message.value = "请填写有效的代理地址和端口"
             return
@@ -56,14 +105,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startVpn() {
-        val current = settings.value
+        val current = _settings.value
         VpnController.start(getApplication(), current)
         viewModelScope.launch { repository.setConnected(true) }
+        _settings.value = current.copy(connected = true)
     }
 
     fun disconnect() {
         VpnController.stop(getApplication())
         viewModelScope.launch { repository.setConnected(false) }
+        _settings.value = _settings.value.copy(connected = false)
     }
 
     fun clearMessage() {

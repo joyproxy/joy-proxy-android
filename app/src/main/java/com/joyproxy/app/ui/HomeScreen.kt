@@ -9,20 +9,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -40,7 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.joyproxy.app.config.DnsMode
 import com.joyproxy.app.config.ProxyProtocol
@@ -56,6 +64,7 @@ fun HomeScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val message by viewModel.message.collectAsState()
+    val testState by viewModel.testState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
@@ -85,19 +94,19 @@ fun HomeScreen(
         ) {
             ConnectionCard(
                 connected = settings.connected,
-                onConnect = {
-                    viewModel.connect(onConnect)
-                },
+                onConnect = { viewModel.connect(onConnect) },
                 onDisconnect = viewModel::disconnect,
             )
 
             ProxyConfigCard(
                 settings = settings,
+                testState = testState,
                 onProtocolChange = viewModel::setProtocol,
                 onHostChange = viewModel::setHost,
                 onPortChange = viewModel::setPort,
                 onUsernameChange = viewModel::setUsername,
                 onPasswordChange = viewModel::setPassword,
+                onTest = viewModel::testProxy,
             )
 
             ScopeCard(
@@ -158,12 +167,24 @@ private fun ConnectionCard(
 @Composable
 private fun ProxyConfigCard(
     settings: ProxySettings,
+    testState: ProxyTestState,
     onProtocolChange: (ProxyProtocol) -> Unit,
     onHostChange: (String) -> Unit,
     onPortChange: (Int) -> Unit,
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onTest: () -> Unit,
 ) {
+    var host by remember { mutableStateOf(settings.host) }
+    var portText by remember { mutableStateOf(settings.port.toString()) }
+    var username by remember { mutableStateOf(settings.username) }
+    var password by remember { mutableStateOf(settings.password) }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(settings.host) { if (host != settings.host) host = settings.host }
+    LaunchedEffect(settings.username) { if (username != settings.username) username = settings.username }
+    LaunchedEffect(settings.password) { if (password != settings.password) password = settings.password }
+
     SectionCard(title = "代理服务器") {
         var protocolExpanded by remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(expanded = protocolExpanded, onExpandedChange = { protocolExpanded = it }) {
@@ -189,37 +210,82 @@ private fun ProxyConfigCard(
         }
 
         OutlinedTextField(
-            value = settings.host,
-            onValueChange = onHostChange,
+            value = host,
+            onValueChange = {
+                host = it
+                onHostChange(it)
+            },
             label = { Text("地址 (IP 或域名)") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
 
         OutlinedTextField(
-            value = settings.port.toString(),
-            onValueChange = { text -> text.toIntOrNull()?.let(onPortChange) },
+            value = portText,
+            onValueChange = {
+                portText = it.filter { ch -> ch.isDigit() }
+                portText.toIntOrNull()?.let { port ->
+                    if (port in 1..65535) onPortChange(port)
+                }
+            },
             label = { Text("端口") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
 
         OutlinedTextField(
-            value = settings.username,
-            onValueChange = onUsernameChange,
+            value = username,
+            onValueChange = {
+                username = it
+                onUsernameChange(it)
+            },
             label = { Text("用户名 (可选)") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
 
         OutlinedTextField(
-            value = settings.password,
-            onValueChange = onPasswordChange,
+            value = password,
+            onValueChange = {
+                password = it
+                onPasswordChange(it)
+            },
             label = { Text("密码 (可选)") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                    )
+                }
+            },
         )
+
+        OutlinedButton(
+            onClick = onTest,
+            enabled = testState.status != ProxyTestStatus.Testing,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (testState.status == ProxyTestStatus.Testing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.padding(end = 8.dp),
+                    strokeWidth = 2.dp,
+                )
+            }
+            Text(if (testState.status == ProxyTestStatus.Testing) "测试中…" else "测试代理连通性")
+        }
+
+        if (testState.status == ProxyTestStatus.Success || testState.status == ProxyTestStatus.Failed) {
+            Text(
+                text = testState.message,
+                color = if (testState.status == ProxyTestStatus.Success) Color(0xFF2E7D32) else Color(0xFFC62828),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }
 
@@ -288,37 +354,32 @@ private fun DnsCard(
     onCustomDnsChange: (String) -> Unit,
     onDohUrlChange: (String) -> Unit,
 ) {
+    var customDnsText by remember { mutableStateOf(customDns) }
+    var dohUrlText by remember { mutableStateOf(dohUrl) }
+
+    LaunchedEffect(customDns) { if (customDnsText != customDns) customDnsText = customDns }
+    LaunchedEffect(dohUrl) { if (dohUrlText != dohUrl) dohUrlText = dohUrl }
+
     SectionCard(title = "DNS 设置") {
         var expanded by remember { mutableStateOf(false) }
-        val label =
-            when (dnsMode) {
-                DnsMode.FAKE_IP -> "Fake-IP (推荐，防 DNS 污染)"
-                DnsMode.DOH -> "安全 DNS (DoH)"
-                DnsMode.CUSTOM -> "自定义 DNS"
-                DnsMode.SYSTEM -> "系统默认"
-            }
 
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             OutlinedTextField(
-                value = label,
+                value = dnsModeLabel(dnsMode),
                 onValueChange = {},
                 readOnly = true,
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(),
             )
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                DnsMode.entries.forEach { mode ->
+                listOf(
+                    DnsMode.FAKE_IP,
+                    DnsMode.DOH,
+                    DnsMode.CUSTOM,
+                    DnsMode.SYSTEM,
+                ).forEach { mode ->
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                when (mode) {
-                                    DnsMode.FAKE_IP -> "Fake-IP (推荐)"
-                                    DnsMode.DOH -> "安全 DNS (DoH)"
-                                    DnsMode.CUSTOM -> "自定义 DNS"
-                                    DnsMode.SYSTEM -> "系统默认"
-                                },
-                            )
-                        },
+                        text = { Text(dnsModeLabel(mode, short = true)) },
                         onClick = {
                             onDnsModeChange(mode)
                             expanded = false
@@ -328,11 +389,21 @@ private fun DnsCard(
             }
         }
 
+        Text(
+            text = dnsModeDescription(dnsMode),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         if (dnsMode == DnsMode.CUSTOM) {
             OutlinedTextField(
-                value = customDns,
-                onValueChange = onCustomDnsChange,
+                value = customDnsText,
+                onValueChange = {
+                    customDnsText = it
+                    onCustomDnsChange(it)
+                },
                 label = { Text("DNS 服务器") },
+                placeholder = { Text("例如 223.5.5.5") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
@@ -340,15 +411,39 @@ private fun DnsCard(
 
         if (dnsMode == DnsMode.DOH || dnsMode == DnsMode.FAKE_IP) {
             OutlinedTextField(
-                value = dohUrl,
-                onValueChange = onDohUrlChange,
+                value = dohUrlText,
+                onValueChange = {
+                    dohUrlText = it
+                    onDohUrlChange(it)
+                },
                 label = { Text("DoH 地址") },
+                placeholder = { Text("https://dns.alidns.com/dns-query") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
         }
     }
 }
+
+private fun dnsModeLabel(mode: DnsMode, short: Boolean = false): String =
+    when (mode) {
+        DnsMode.FAKE_IP ->
+            if (short) "远程解析 (推荐)" else "远程解析 (推荐，防 DNS 污染)"
+        DnsMode.DOH ->
+            if (short) "加密 DNS (DoH)" else "加密 DNS (DoH)"
+        DnsMode.CUSTOM ->
+            if (short) "自定义 DNS" else "自定义 DNS"
+        DnsMode.SYSTEM ->
+            if (short) "系统默认" else "系统默认"
+    }
+
+private fun dnsModeDescription(mode: DnsMode): String =
+    when (mode) {
+        DnsMode.FAKE_IP -> "由代理服务器远程解析域名，可有效避免 DNS 污染，推荐使用。"
+        DnsMode.DOH -> "通过加密 DNS 查询解析域名，需填写可访问的 DoH 地址。"
+        DnsMode.CUSTOM -> "使用你指定的 DNS 服务器，查询会经代理发出。"
+        DnsMode.SYSTEM -> "使用系统默认 DNS，可能受到 DNS 污染影响。"
+    }
 
 @Composable
 private fun SectionCard(
