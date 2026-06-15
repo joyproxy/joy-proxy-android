@@ -13,8 +13,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.net.InetAddress
 import java.net.UnknownHostException
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 object LocalResolver : LocalDNSTransport {
     private const val RCODE_NXDOMAIN = 3
@@ -43,7 +41,7 @@ object LocalResolver : LocalDNSTransport {
                                 } else {
                                     ctx.errorCode(rcode)
                                 }
-                                if (continuation.isActive) continuation.resume(Unit)
+                                if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
                             }
 
                             override fun onError(error: DnsResolver.DnsException) {
@@ -53,7 +51,7 @@ object LocalResolver : LocalDNSTransport {
                                 } else {
                                     ctx.errorCode(RCODE_SERVFAIL)
                                 }
-                                if (continuation.isActive) continuation.resume(Unit)
+                                if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
                             }
                         }
                     DnsResolver.getInstance().rawQuery(
@@ -91,7 +89,7 @@ object LocalResolver : LocalDNSTransport {
                                     } else {
                                         ctx.errorCode(rcode)
                                     }
-                                    if (continuation.isActive) continuation.resume(Unit)
+                                    if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
                                 }
 
                                 override fun onError(error: DnsResolver.DnsException) {
@@ -101,7 +99,7 @@ object LocalResolver : LocalDNSTransport {
                                     } else {
                                         ctx.errorCode(RCODE_SERVFAIL)
                                     }
-                                    if (continuation.isActive) continuation.resume(Unit)
+                                    if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
                                 }
                             }
                     val type =
