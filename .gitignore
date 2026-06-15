@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# libbox (built in CI)
+app/libs/*.aar
+
+# Secrets
+*.keystore
+service-account-credentials.json
+
+# Logs
+*.log
