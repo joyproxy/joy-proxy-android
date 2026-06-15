@@ -10,9 +10,10 @@ import io.nekohasekai.libbox.LocalDNSTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
 import java.net.InetAddress
 import java.net.UnknownHostException
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 object LocalResolver : LocalDNSTransport {
     private const val RCODE_NXDOMAIN = 3
@@ -22,7 +23,7 @@ object LocalResolver : LocalDNSTransport {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun exchange(ctx: ExchangeContext, message: ByteArray) {
-        // 这些方法在 native 热路径上被调用，绝不能向上层抛出异常，否则进程会 abort。
+        // native 热路径：绝不能向上抛异常，否则整个进程会 abort。
         try {
             val defaultNetwork = DefaultNetworkMonitor.defaultNetwork
             if (defaultNetwork == null) {
@@ -30,7 +31,7 @@ object LocalResolver : LocalDNSTransport {
                 return
             }
             runBlocking {
-                suspendCancellableCoroutine { continuation ->
+                suspendCoroutine { continuation ->
                     val signal = CancellationSignal()
                     ctx.onCancel(signal::cancel)
                     val callback =
@@ -41,17 +42,19 @@ object LocalResolver : LocalDNSTransport {
                                 } else {
                                     ctx.errorCode(rcode)
                                 }
-                                if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
+                                continuation.resume(Unit)
                             }
 
                             override fun onError(error: DnsResolver.DnsException) {
-                                val cause = error.cause
-                                if (cause is ErrnoException) {
-                                    ctx.errnoCode(cause.errno)
-                                } else {
-                                    ctx.errorCode(RCODE_SERVFAIL)
+                                when (val cause = error.cause) {
+                                    is ErrnoException -> {
+                                        ctx.errnoCode(cause.errno)
+                                        continuation.resume(Unit)
+                                        return
+                                    }
                                 }
-                                if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
+                                ctx.errorCode(RCODE_SERVFAIL)
+                                continuation.resume(Unit)
                             }
                         }
                     DnsResolver.getInstance().rawQuery(
@@ -78,7 +81,7 @@ object LocalResolver : LocalDNSTransport {
             }
             runBlocking {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    suspendCancellableCoroutine { continuation ->
+                    suspendCoroutine { continuation ->
                         val signal = CancellationSignal()
                         ctx.onCancel(signal::cancel)
                         val callback =
@@ -89,56 +92,58 @@ object LocalResolver : LocalDNSTransport {
                                     } else {
                                         ctx.errorCode(rcode)
                                     }
-                                    if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
+                                    continuation.resume(Unit)
                                 }
 
                                 override fun onError(error: DnsResolver.DnsException) {
-                                    val cause = error.cause
-                                    if (cause is ErrnoException) {
-                                        ctx.errnoCode(cause.errno)
-                                    } else {
-                                        ctx.errorCode(RCODE_SERVFAIL)
+                                    when (val cause = error.cause) {
+                                        is ErrnoException -> {
+                                            ctx.errnoCode(cause.errno)
+                                            continuation.resume(Unit)
+                                            return
+                                        }
                                     }
-                                    if (continuation.isActive) continuation.resumeWith(Result.success(Unit))
+                                    ctx.errorCode(RCODE_SERVFAIL)
+                                    continuation.resume(Unit)
                                 }
                             }
-                    val type =
-                        when {
-                            network.endsWith("4") -> DnsResolver.TYPE_A
-                            network.endsWith("6") -> DnsResolver.TYPE_AAAA
-                            else -> null
+                        val type =
+                            when {
+                                network.endsWith("4") -> DnsResolver.TYPE_A
+                                network.endsWith("6") -> DnsResolver.TYPE_AAAA
+                                else -> null
+                            }
+                        if (type != null) {
+                            DnsResolver.getInstance().query(
+                                defaultNetwork,
+                                domain,
+                                type,
+                                DnsResolver.FLAG_NO_RETRY,
+                                Dispatchers.IO.asExecutor(),
+                                signal,
+                                callback,
+                            )
+                        } else {
+                            DnsResolver.getInstance().query(
+                                defaultNetwork,
+                                domain,
+                                DnsResolver.FLAG_NO_RETRY,
+                                Dispatchers.IO.asExecutor(),
+                                signal,
+                                callback,
+                            )
                         }
-                    if (type != null) {
-                        DnsResolver.getInstance().query(
-                            defaultNetwork,
-                            domain,
-                            type,
-                            DnsResolver.FLAG_NO_RETRY,
-                            Dispatchers.IO.asExecutor(),
-                            signal,
-                            callback,
-                        )
-                    } else {
-                        DnsResolver.getInstance().query(
-                            defaultNetwork,
-                            domain,
-                            DnsResolver.FLAG_NO_RETRY,
-                            Dispatchers.IO.asExecutor(),
-                            signal,
-                            callback,
-                        )
                     }
+                } else {
+                    val answer =
+                        try {
+                            InetAddress.getAllByName(domain)
+                        } catch (e: UnknownHostException) {
+                            ctx.errorCode(RCODE_NXDOMAIN)
+                            return@runBlocking
+                        }
+                    ctx.success(answer.mapNotNull { it.hostAddress }.joinToString("\n"))
                 }
-            } else {
-                val answer =
-                    try {
-                        InetAddress.getAllByName(domain)
-                    } catch (e: UnknownHostException) {
-                        ctx.errorCode(RCODE_NXDOMAIN)
-                        return@runBlocking
-                    }
-                ctx.success(answer.mapNotNull { it.hostAddress }.joinToString("\n"))
-            }
             }
         } catch (t: Throwable) {
             runCatching { ctx.errorCode(RCODE_SERVFAIL) }
