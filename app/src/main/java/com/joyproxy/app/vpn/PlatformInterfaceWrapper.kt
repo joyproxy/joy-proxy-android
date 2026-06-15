@@ -70,8 +70,16 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     }
 
     override fun getInterfaces(): NetworkInterfaceIterator {
+        return try {
+            buildInterfaces()
+        } catch (t: Throwable) {
+            InterfaceArray(emptyList<LibboxNetworkInterface>().iterator())
+        }
+    }
+
+    private fun buildInterfaces(): NetworkInterfaceIterator {
         val networks = JoyProxyApp.connectivity.allNetworks
-        val networkInterfaces = NetworkInterface.getNetworkInterfaces().toList()
+        val networkInterfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
         val interfaces = mutableListOf<LibboxNetworkInterface>()
         for (network in networks) {
             val boxInterface = LibboxNetworkInterface()
@@ -127,32 +135,43 @@ interface PlatformInterfaceWrapper : PlatformInterface {
 
     override fun clearDNSCache() {}
 
+    // libbox 的 ReadWIFIState() 在 Go 接口里不返回 error，任何抛出的异常都会让整个进程 abort。
+    // Android 12+ 无定位权限时 connectionInfo / ssid 可能抛异常或为 null，必须全部吞掉返回 null。
     override fun readWIFIState(): WIFIState? {
-        @Suppress("DEPRECATION")
-        val wifiInfo = JoyProxyApp.wifiManager.connectionInfo ?: return null
-        var ssid = wifiInfo.ssid
-        if (ssid == " ") return WIFIState("", "")
-        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
-            ssid = ssid.substring(1, ssid.length - 1)
+        return try {
+            @Suppress("DEPRECATION")
+            val wifiInfo = JoyProxyApp.wifiManager.connectionInfo ?: return null
+            var ssid = wifiInfo.ssid ?: return WIFIState("", "")
+            if (ssid == " " || ssid == "<unknown ssid>") return WIFIState("", "")
+            if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
+                ssid = ssid.substring(1, ssid.length - 1)
+            }
+            WIFIState(ssid, wifiInfo.bssid ?: "")
+        } catch (t: Throwable) {
+            null
         }
-        return WIFIState(ssid, wifiInfo.bssid)
     }
 
     override fun localDNSTransport(): LocalDNSTransport? = LocalResolver
 
+    // SystemCertificates() 同样不返回 error，必须保证不抛异常。
     @OptIn(ExperimentalEncodingApi::class)
     override fun systemCertificates(): StringIterator {
-        val certificates = mutableListOf<String>()
-        val keyStore = KeyStore.getInstance("AndroidCAStore")
-        keyStore.load(null, null)
-        val aliases = keyStore.aliases()
-        while (aliases.hasMoreElements()) {
-            val cert = keyStore.getCertificate(aliases.nextElement())
-            certificates.add(
-                "-----BEGIN CERTIFICATE-----\n" + Base64.encode(cert.encoded) + "\n-----END CERTIFICATE-----",
-            )
+        return try {
+            val certificates = mutableListOf<String>()
+            val keyStore = KeyStore.getInstance("AndroidCAStore")
+            keyStore.load(null, null)
+            val aliases = keyStore.aliases()
+            while (aliases.hasMoreElements()) {
+                val cert = keyStore.getCertificate(aliases.nextElement()) ?: continue
+                certificates.add(
+                    "-----BEGIN CERTIFICATE-----\n" + Base64.encode(cert.encoded) + "\n-----END CERTIFICATE-----",
+                )
+            }
+            StringArray(certificates.iterator())
+        } catch (t: Throwable) {
+            StringArray(emptyList<String>().iterator())
         }
-        return StringArray(certificates.iterator())
     }
 
     private class InterfaceArray(private val iterator: Iterator<LibboxNetworkInterface>) : NetworkInterfaceIterator {
@@ -160,8 +179,10 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         override fun next(): LibboxNetworkInterface = iterator.next()
     }
 
-    class StringArray(private val iterator: Iterator<String>) : StringIterator {
-        override fun len(): Int = 0
+    class StringArray(source: Iterator<String>) : StringIterator {
+        private val values = source.asSequence().toList()
+        private val iterator = values.iterator()
+        override fun len(): Int = values.size
         override fun hasNext(): Boolean = iterator.hasNext()
         override fun next(): String = iterator.next()
     }

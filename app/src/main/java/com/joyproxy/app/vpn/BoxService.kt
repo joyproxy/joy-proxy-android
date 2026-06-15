@@ -314,6 +314,7 @@ class BoxService(
                 .setOngoing(ongoing)
                 .build()
 
-        service.startForeground(NOTIFICATION_ID, notification)
+        runCatching { service.startForeground(NOTIFICATION_ID, notification) }
+            .onFailure { Log.e(TAG, "startForeground failed", it) }
     }
 }
