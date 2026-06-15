@@ -13,8 +13,22 @@ android {
         applicationId = "com.joyproxy.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
+    }
+
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("KEYSTORE_FILE") ?: "joyproxy-release.p12"
+            val keystore = file(keystorePath)
+            if (keystore.exists()) {
+                storeFile = keystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: "joyproxy"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+                storeType = "PKCS12"
+            }
+        }
     }
 
     buildTypes {
@@ -24,6 +38,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            val keystorePath = System.getenv("KEYSTORE_FILE") ?: "joyproxy-release.p12"
+            if (file(keystorePath).exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

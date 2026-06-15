@@ -25,6 +25,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24.x"
+          cache: false
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -48,7 +49,26 @@ jobs:
           cp libbox.aar "$GITHUB_WORKSPACE/app/libs/libbox.aar"
           ls -lh "$GITHUB_WORKSPACE/app/libs/libbox.aar"
 
+      - name: Prepare release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_BASE64 secret is missing"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > app/joyproxy-release.p12
+          ls -lh app/joyproxy-release.p12
+
       - name: Build release APK
+        env:
+          KEYSTORE_FILE: joyproxy-release.p12
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK artifact
@@ -62,11 +82,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0-${{ github.run_number }}
-          name: JoyProxy v1.0.0 build ${{ github.run_number }}
+          name: JoyProxy v1.0.1 build ${{ github.run_number }}
           files: app/build/outputs/apk/release/*.apk
           body: |
-            JoyProxy 自动构建 APK (build ${{ github.run_number }})
+            JoyProxy 签名版 APK (build ${{ github.run_number }})
 
+            - 已使用 release 证书签名，可直接安装
             - HTTP / SOCKS5 代理
             - 全局 / 白名单 / 黑名单 代理范围
             - Fake-IP / DoH / 自定义 / 系统 DNS

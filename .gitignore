@@ -17,6 +17,8 @@ app/libs/*.aar
 
 # Secrets
 *.keystore
+*.p12
+keystore.b64.txt
 service-account-credentials.json
 
 # Logs
