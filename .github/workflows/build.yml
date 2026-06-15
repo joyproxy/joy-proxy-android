@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -61,6 +64,11 @@ jobs:
           tag_name: v1.0.0-${{ github.run_number }}
           name: JoyProxy v1.0.0 build ${{ github.run_number }}
           files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+          body: |
+            JoyProxy 自动构建 APK (build ${{ github.run_number }})
+
+            - HTTP / SOCKS5 代理
+            - 全局 / 白名单 / 黑名单 代理范围
+            - Fake-IP / DoH / 自定义 / 系统 DNS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
