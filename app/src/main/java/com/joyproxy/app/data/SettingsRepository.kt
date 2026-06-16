@@ -1,22 +1,17 @@
 package com.joyproxy.app.data
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import com.joyproxy.app.config.DnsMode
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "proxy_settings")
 
 class SettingsRepository(private val context: Context) {
     private object Keys {
@@ -33,7 +28,7 @@ class SettingsRepository(private val context: Context) {
         val CONNECTED = booleanPreferencesKey("connected")
     }
 
-    val settings: Flow<ProxySettings> = context.dataStore.data.map { prefs ->
+    val settings: Flow<ProxySettings> = context.appPreferencesStore.data.map { prefs ->
         ProxySettings(
             protocol = runCatching { ProxyProtocol.valueOf(prefs[Keys.PROTOCOL] ?: ProxyProtocol.SOCKS5.name) }
                 .getOrDefault(ProxyProtocol.SOCKS5),
@@ -53,7 +48,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun save(settings: ProxySettings) {
-        context.dataStore.edit { prefs ->
+        context.appPreferencesStore.edit { prefs ->
             prefs[Keys.PROTOCOL] = settings.protocol.name
             prefs[Keys.HOST] = settings.host
             prefs[Keys.PORT] = settings.port
@@ -69,7 +64,7 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun setConnected(connected: Boolean) {
-        context.dataStore.edit { prefs ->
+        context.appPreferencesStore.edit { prefs ->
             prefs[Keys.CONNECTED] = connected
         }
     }
