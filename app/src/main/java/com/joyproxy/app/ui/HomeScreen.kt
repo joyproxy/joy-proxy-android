@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Visibility
@@ -55,6 +56,7 @@ import com.joyproxy.app.config.DnsMode
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
+import com.joyproxy.app.config.SavedProxy
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +69,7 @@ fun HomeScreen(
     val connecting by viewModel.connecting.collectAsState()
     val message by viewModel.message.collectAsState()
     val testState by viewModel.testState.collectAsState()
+    val savedProxies by viewModel.savedProxies.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var dnsTapCount by remember { mutableStateOf(0) }
     var showDnsSettings by remember { mutableStateOf(false) }
@@ -117,6 +120,7 @@ fun HomeScreen(
             ProxyConfigCard(
                 settings = settings,
                 testState = testState,
+                savedProxies = savedProxies,
                 connected = settings.connected,
                 connecting = connecting,
                 onProtocolChange = viewModel::setProtocol,
@@ -124,6 +128,8 @@ fun HomeScreen(
                 onPortChange = viewModel::setPort,
                 onUsernameChange = viewModel::setUsername,
                 onPasswordChange = viewModel::setPassword,
+                onApplySavedProxy = viewModel::applySavedProxy,
+                onDeleteSavedProxy = viewModel::deleteSavedProxy,
                 onTest = viewModel::testProxy,
             )
 
@@ -205,6 +211,7 @@ private fun ConnectionCard(
 private fun ProxyConfigCard(
     settings: ProxySettings,
     testState: ProxyTestState,
+    savedProxies: List<SavedProxy>,
     connected: Boolean,
     connecting: Boolean,
     onProtocolChange: (ProxyProtocol) -> Unit,
@@ -212,6 +219,8 @@ private fun ProxyConfigCard(
     onPortChange: (Int) -> Unit,
     onUsernameChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onApplySavedProxy: (SavedProxy) -> Unit,
+    onDeleteSavedProxy: (String) -> Unit,
     onTest: () -> Unit,
 ) {
     var host by remember { mutableStateOf(settings.host) }
@@ -229,6 +238,63 @@ private fun ProxyConfigCard(
     LaunchedEffect(settings.password) { if (password != settings.password) password = settings.password }
 
     SectionCard(title = "代理服务器") {
+        if (savedProxies.isNotEmpty()) {
+            var historyExpanded by remember { mutableStateOf(false) }
+            val currentId =
+                if (settings.isValid()) {
+                    SavedProxy.fingerprint(
+                        settings.protocol,
+                        settings.host.trim(),
+                        settings.port,
+                        settings.username.trim(),
+                    )
+                } else {
+                    null
+                }
+            val historyLabel =
+                savedProxies.find { it.id == currentId }?.displayLabel()
+                    ?: "选择已保存的代理 (${savedProxies.size})"
+
+            ExposedDropdownMenuBox(
+                expanded = historyExpanded,
+                onExpandedChange = { historyExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = historyLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("历史记录") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = historyExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                )
+                ExposedDropdownMenu(
+                    expanded = historyExpanded,
+                    onDismissRequest = { historyExpanded = false },
+                ) {
+                    savedProxies.forEach { proxy ->
+                        DropdownMenuItem(
+                            text = { Text(proxy.displayLabel()) },
+                            onClick = {
+                                onApplySavedProxy(proxy)
+                                historyExpanded = false
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { onDeleteSavedProxy(proxy.id) },
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "删除",
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
         var protocolExpanded by remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(expanded = protocolExpanded, onExpandedChange = { protocolExpanded = it }) {
             OutlinedTextField(

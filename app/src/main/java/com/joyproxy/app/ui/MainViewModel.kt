@@ -7,6 +7,8 @@ import com.joyproxy.app.config.DnsMode
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
+import com.joyproxy.app.config.SavedProxy
+import com.joyproxy.app.data.ProxyHistoryRepository
 import com.joyproxy.app.data.SettingsRepository
 import com.joyproxy.app.network.ProxyTester
 import com.joyproxy.app.vpn.VpnController
@@ -33,7 +35,9 @@ data class ProxyTestState(
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
+    private val historyRepository = ProxyHistoryRepository(application)
     private var saveJob: Job? = null
+    private var historyJob: Job? = null
 
     private val _settings = MutableStateFlow(ProxySettings())
     val settings: StateFlow<ProxySettings> = _settings.asStateFlow()
@@ -47,7 +51,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _connecting = MutableStateFlow(false)
     val connecting: StateFlow<Boolean> = _connecting.asStateFlow()
 
+    private val _savedProxies = MutableStateFlow<List<SavedProxy>>(emptyList())
+    val savedProxies: StateFlow<List<SavedProxy>> = _savedProxies.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            historyRepository.history.collect { _savedProxies.value = it }
+        }
         viewModelScope.launch {
             val saved = repository.settings.first()
             _settings.value = saved.copy(connected = false)
@@ -85,6 +95,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 delay(400)
                 repository.save(updated.copy(connected = _settings.value.connected))
             }
+        scheduleHistorySave()
+    }
+
+    private fun scheduleHistorySave() {
+        historyJob?.cancel()
+        historyJob =
+            viewModelScope.launch {
+                delay(1200)
+                val current = _settings.value
+                if (current.isValid()) {
+                    historyRepository.upsert(current)
+                }
+            }
+    }
+
+    private fun saveHistoryNow() {
+        historyJob?.cancel()
+        viewModelScope.launch {
+            val current = _settings.value
+            if (current.isValid()) {
+                historyRepository.upsert(current)
+            }
+        }
     }
 
     suspend fun flushSettings() {
@@ -116,6 +149,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setDohUrl(url: String) = update { it.copy(dohUrl = url) }
 
+    fun applySavedProxy(proxy: SavedProxy) {
+        update {
+            it.copy(
+                protocol = proxy.protocol,
+                host = proxy.host,
+                port = proxy.port,
+                username = proxy.username,
+                password = proxy.password,
+            )
+        }
+    }
+
+    fun deleteSavedProxy(id: String) {
+        viewModelScope.launch {
+            historyRepository.delete(id)
+        }
+    }
+
     private fun notifyReconnectIfConnected(settingName: String) {
         if (_settings.value.connected) {
             _message.value = "已修改$settingName，需断开后重新连接方可生效"
@@ -141,6 +192,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     status = if (result.success) ProxyTestStatus.Success else ProxyTestStatus.Failed,
                     message = result.message,
                 )
+            if (result.success) {
+                saveHistoryNow()
+            }
         }
     }
 
@@ -154,6 +208,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _message.value = "请选择至少一个应用"
             return
         }
+        saveHistoryNow()
         onNeedPermission()
     }
 

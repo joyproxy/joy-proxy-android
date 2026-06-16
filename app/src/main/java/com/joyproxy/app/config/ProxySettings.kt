@@ -1,5 +1,8 @@
 package com.joyproxy.app.config
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class ProxyProtocol {
     SOCKS5,
     HTTP,
