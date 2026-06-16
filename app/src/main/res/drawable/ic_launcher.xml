@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/ic_launcher_background" />
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <gradient
+                android:angle="135"
+                android:endColor="#764BA2"
+                android:startColor="#667EEA"
+                android:type="linear" />
+        </shape>
+    </item>
     <item android:drawable="@drawable/ic_launcher_foreground" />
 </layer-list>
