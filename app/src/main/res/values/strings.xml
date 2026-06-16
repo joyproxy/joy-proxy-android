@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">JoyProxy</string>
-    <string name="vpn_notification_channel">VPN 连接</string>
+    <string name="vpn_notification_channel">代理连接</string>
     <string name="vpn_notification_title">JoyProxy 已连接</string>
     <string name="vpn_notification_text">代理运行中</string>
     <string name="vpn_connecting">正在连接…</string>

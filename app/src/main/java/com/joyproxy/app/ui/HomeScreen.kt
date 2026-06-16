@@ -208,12 +208,6 @@ private fun ConnectionCard(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 10.dp),
                 )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = if (connected) "VPN 运行中" else "VPN 未启动",
-                    color = JoyProxyColors.TextSecondary,
-                    fontSize = 12.sp,
-                )
             }
 
             Box(

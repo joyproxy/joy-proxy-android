@@ -117,11 +117,11 @@ class BoxService(
         val message = error.message.orEmpty()
         return when {
             message.contains("missing vpn permission", ignoreCase = true) ->
-                "未获得 VPN 授权，请允许建立 VPN 连接"
+                "未获得代理连接授权，请在系统弹窗中允许"
             message.contains("vpn establish failed", ignoreCase = true) ->
-                "VPN 隧道建立失败，请重试"
-            message.isBlank() -> "VPN 启动失败，请稍后重试"
-            else -> "VPN 启动失败：${message.take(120)}"
+                "代理隧道建立失败，请重试"
+            message.isBlank() -> "代理启动失败，请稍后重试"
+            else -> "代理启动失败：${message.take(120)}"
         }
     }
 

@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
             if (result.resultCode == RESULT_OK) {
                 requestNotificationPermissionThenStart()
             } else {
-                viewModel.showMessage("需要 VPN 授权才能建立代理连接")
+                viewModel.showMessage("需要系统授权才能建立代理连接")
             }
         }
 
