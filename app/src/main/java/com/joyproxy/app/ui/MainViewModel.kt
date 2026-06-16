@@ -37,7 +37,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SettingsRepository(application)
     private val historyRepository = ProxyHistoryRepository(application)
     private var saveJob: Job? = null
-    private var historyJob: Job? = null
 
     private val _settings = MutableStateFlow(ProxySettings())
     val settings: StateFlow<ProxySettings> = _settings.asStateFlow()
@@ -74,14 +73,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             VpnStatusBus.events.collect { event ->
                 when (event) {
                     is VpnStatusBus.Event.Connecting -> _connecting.value = true
-                    is VpnStatusBus.Event.Connected,
-                    is VpnStatusBus.Event.Disconnected,
-                    -> _connecting.value = false
+                    is VpnStatusBus.Event.Connected -> {
+                        _connecting.value = false
+                        saveHistoryOnConnect()
+                    }
+                    is VpnStatusBus.Event.Disconnected -> _connecting.value = false
                     is VpnStatusBus.Event.Failed -> {
                         _connecting.value = false
                         _message.value = event.message
                     }
                 }
+            }
+        }
+    }
+
+    private fun saveHistoryOnConnect() {
+        viewModelScope.launch {
+            val current = _settings.value
+            if (current.isValid()) {
+                historyRepository.upsert(current)
             }
         }
     }
@@ -95,29 +105,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 delay(400)
                 repository.save(updated.copy(connected = _settings.value.connected))
             }
-        scheduleHistorySave()
-    }
-
-    private fun scheduleHistorySave() {
-        historyJob?.cancel()
-        historyJob =
-            viewModelScope.launch {
-                delay(1200)
-                val current = _settings.value
-                if (current.isValid()) {
-                    historyRepository.upsert(current)
-                }
-            }
-    }
-
-    private fun saveHistoryNow() {
-        historyJob?.cancel()
-        viewModelScope.launch {
-            val current = _settings.value
-            if (current.isValid()) {
-                historyRepository.upsert(current)
-            }
-        }
     }
 
     suspend fun flushSettings() {
@@ -192,9 +179,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     status = if (result.success) ProxyTestStatus.Success else ProxyTestStatus.Failed,
                     message = result.message,
                 )
-            if (result.success) {
-                saveHistoryNow()
-            }
         }
     }
 
@@ -208,7 +192,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _message.value = "请选择至少一个应用"
             return
         }
-        saveHistoryNow()
         onNeedPermission()
     }
 
