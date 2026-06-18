@@ -13,7 +13,7 @@ android {
         applicationId = "com.joyproxy.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 19
+        versionCode = 20
         versionName = "1.0.1"
     }
 

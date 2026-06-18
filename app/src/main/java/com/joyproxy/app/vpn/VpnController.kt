@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
 import com.joyproxy.app.config.DnsMode
+import com.joyproxy.app.config.DnsProvider
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
@@ -18,6 +19,7 @@ object VpnController {
     const val EXTRA_SCOPE = "scope"
     const val EXTRA_SELECTED_APPS = "selected_apps"
     const val EXTRA_DNS_MODE = "dns_mode"
+    const val EXTRA_DNS_PROVIDER = "dns_provider"
     const val EXTRA_CUSTOM_DNS = "custom_dns"
     const val EXTRA_DOH_URL = "doh_url"
 
@@ -49,8 +51,9 @@ fun Intent.putProxySettings(settings: ProxySettings) {
     putExtra(VpnController.EXTRA_SCOPE, settings.scope.name)
     putStringArrayListExtra(VpnController.EXTRA_SELECTED_APPS, ArrayList(settings.selectedApps))
     putExtra(VpnController.EXTRA_DNS_MODE, settings.dnsMode.name)
-    putExtra(VpnController.EXTRA_CUSTOM_DNS, settings.customDns)
-    putExtra(VpnController.EXTRA_DOH_URL, settings.dohUrl)
+    putExtra(VpnController.EXTRA_DNS_PROVIDER, settings.dnsProvider.name)
+    putExtra(VpnController.EXTRA_CUSTOM_DNS, settings.dnsProvider.plainDns)
+    putExtra(VpnController.EXTRA_DOH_URL, settings.dnsProvider.dohUrl)
 }
 
 fun Intent.readProxySettings(): ProxySettings? {
@@ -71,10 +74,14 @@ fun Intent.readProxySettings(): ProxySettings? {
         selectedApps = getStringArrayListExtra(VpnController.EXTRA_SELECTED_APPS)?.toSet() ?: emptySet(),
         dnsMode =
             runCatching {
-                DnsMode.valueOf(getStringExtra(VpnController.EXTRA_DNS_MODE) ?: DnsMode.FAKE_IP.name)
-            }.getOrDefault(DnsMode.FAKE_IP),
-        customDns = getStringExtra(VpnController.EXTRA_CUSTOM_DNS) ?: "223.5.5.5",
-        dohUrl = getStringExtra(VpnController.EXTRA_DOH_URL) ?: "https://dns.alidns.com/dns-query",
+                DnsMode.valueOf(getStringExtra(VpnController.EXTRA_DNS_MODE) ?: DnsMode.SYSTEM.name)
+            }.getOrDefault(DnsMode.SYSTEM),
+        dnsProvider =
+            runCatching {
+                DnsProvider.fromId(getStringExtra(VpnController.EXTRA_DNS_PROVIDER))
+            }.getOrDefault(DnsProvider.GOOGLE),
+        customDns = getStringExtra(VpnController.EXTRA_CUSTOM_DNS) ?: DnsProvider.GOOGLE.plainDns,
+        dohUrl = getStringExtra(VpnController.EXTRA_DOH_URL) ?: DnsProvider.GOOGLE.dohUrl,
         connected = true,
     )
 }

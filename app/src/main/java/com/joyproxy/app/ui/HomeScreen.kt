@@ -57,12 +57,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.joyproxy.app.BuildConfig
 import com.joyproxy.app.config.DnsMode
+import com.joyproxy.app.config.DnsProvider
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
@@ -155,13 +158,22 @@ fun HomeScreen(
             if (showDnsSettings) {
                 DnsCard(
                     dnsMode = settings.dnsMode,
-                    customDns = settings.customDns,
-                    dohUrl = settings.dohUrl,
+                    dnsProvider = settings.dnsProvider,
                     onDnsModeChange = viewModel::setDnsMode,
-                    onCustomDnsChange = viewModel::setCustomDns,
-                    onDohUrlChange = viewModel::setDohUrl,
+                    onDnsProviderChange = viewModel::setDnsProvider,
                 )
             }
+
+            Text(
+                text = "v${BuildConfig.VERSION_NAME}",
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                color = JoyProxyColors.TextSecondary,
+            )
             }
         }
     }
@@ -531,43 +543,36 @@ private fun ScopeCard(
 @Composable
 private fun DnsCard(
     dnsMode: DnsMode,
-    customDns: String,
-    dohUrl: String,
+    dnsProvider: DnsProvider,
     onDnsModeChange: (DnsMode) -> Unit,
-    onCustomDnsChange: (String) -> Unit,
-    onDohUrlChange: (String) -> Unit,
+    onDnsProviderChange: (DnsProvider) -> Unit,
 ) {
-    var customDnsText by remember { mutableStateOf(customDns) }
-    var dohUrlText by remember { mutableStateOf(dohUrl) }
-
-    LaunchedEffect(customDns) { if (customDnsText != customDns) customDnsText = customDns }
-    LaunchedEffect(dohUrl) { if (dohUrlText != dohUrl) dohUrlText = dohUrl }
-
     SectionCard(title = "DNS 设置") {
-        var expanded by remember { mutableStateOf(false) }
+        var modeExpanded by remember { mutableStateOf(false) }
 
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        ExposedDropdownMenuBox(expanded = modeExpanded, onExpandedChange = { modeExpanded = it }) {
             OutlinedTextField(
                 value = dnsModeLabel(dnsMode),
                 onValueChange = {},
                 readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                label = { Text("DNS 模式") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeExpanded) },
                 modifier = Modifier.fillMaxWidth().menuAnchor(),
                 shape = RoundedCornerShape(12.dp),
                 colors = fieldColors,
             )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ExposedDropdownMenu(expanded = modeExpanded, onDismissRequest = { modeExpanded = false }) {
                 listOf(
+                    DnsMode.SYSTEM,
                     DnsMode.FAKE_IP,
                     DnsMode.DOH,
                     DnsMode.CUSTOM,
-                    DnsMode.SYSTEM,
                 ).forEach { mode ->
                     DropdownMenuItem(
                         text = { Text(dnsModeLabel(mode)) },
                         onClick = {
                             onDnsModeChange(mode)
-                            expanded = false
+                            modeExpanded = false
                         },
                     )
                 }
@@ -580,51 +585,44 @@ private fun DnsCard(
             color = JoyProxyColors.TextSecondary,
         )
 
-        if (dnsMode == DnsMode.CUSTOM) {
-            OutlinedTextField(
-                value = customDnsText,
-                onValueChange = {
-                    customDnsText = it
-                    onCustomDnsChange(it)
-                },
-                label = { Text("DNS 服务器") },
-                placeholder = { Text("例如 223.5.5.5") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = fieldColors,
-            )
-        }
+        if (dnsMode != DnsMode.SYSTEM) {
+            var providerExpanded by remember { mutableStateOf(false) }
+            val providerLabel =
+                when (dnsMode) {
+                    DnsMode.FAKE_IP -> "远程 DNS 供应商"
+                    DnsMode.DOH -> "DoH 供应商"
+                    DnsMode.CUSTOM -> "DNS 供应商"
+                    else -> "DNS 供应商"
+                }
 
-        if (dnsMode == DnsMode.FAKE_IP) {
-            OutlinedTextField(
-                value = dohUrlText,
-                onValueChange = {
-                    dohUrlText = it
-                    onDohUrlChange(it)
-                },
-                label = { Text("远程 DNS (DoH)") },
-                placeholder = { Text("https://dns.alidns.com/dns-query") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = fieldColors,
-            )
-        }
+            ExposedDropdownMenuBox(expanded = providerExpanded, onExpandedChange = { providerExpanded = it }) {
+                OutlinedTextField(
+                    value = dnsProvider.label,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(providerLabel) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = fieldColors,
+                )
+                ExposedDropdownMenu(expanded = providerExpanded, onDismissRequest = { providerExpanded = false }) {
+                    DnsProvider.entries.forEach { provider ->
+                        DropdownMenuItem(
+                            text = { Text(provider.label) },
+                            onClick = {
+                                onDnsProviderChange(provider)
+                                providerExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
 
-        if (dnsMode == DnsMode.DOH) {
-            OutlinedTextField(
-                value = dohUrlText,
-                onValueChange = {
-                    dohUrlText = it
-                    onDohUrlChange(it)
-                },
-                label = { Text("DoH 地址") },
-                placeholder = { Text("https://dns.alidns.com/dns-query") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = fieldColors,
+            Text(
+                text = dnsProviderDetail(dnsMode, dnsProvider),
+                style = MaterialTheme.typography.bodySmall,
+                color = JoyProxyColors.TextSecondary,
             )
         }
     }
@@ -632,7 +630,7 @@ private fun DnsCard(
 
 private fun dnsModeLabel(mode: DnsMode): String =
     when (mode) {
-        DnsMode.FAKE_IP -> "推荐"
+        DnsMode.FAKE_IP -> "推荐 (Fake-IP)"
         DnsMode.DOH -> "加密 DNS (DoH)"
         DnsMode.CUSTOM -> "自定义 DNS"
         DnsMode.SYSTEM -> "系统默认"
@@ -640,10 +638,17 @@ private fun dnsModeLabel(mode: DnsMode): String =
 
 private fun dnsModeDescription(mode: DnsMode): String =
     when (mode) {
-        DnsMode.FAKE_IP -> "应用拿到虚拟 IP，真实域名在代理端解析。下方 DoH 用于代理端远程解析。"
-        DnsMode.DOH -> "DNS 查询经 HTTPS 加密后走代理，返回真实 IP。不经过虚拟 IP 映射。"
-        DnsMode.CUSTOM -> "使用你指定的 DNS 服务器，查询会经代理发出。"
-        DnsMode.SYSTEM -> "使用系统默认 DNS。"
+        DnsMode.FAKE_IP -> "应用拿到虚拟 IP，真实域名在代理端通过所选 DoH 解析。防 DNS 污染效果最好。"
+        DnsMode.DOH -> "DNS 查询经 HTTPS 加密后走代理，返回真实 IP。"
+        DnsMode.CUSTOM -> "使用所选 DNS 服务器，TCP 查询经代理发出。"
+        DnsMode.SYSTEM -> "使用系统默认 DNS 直连解析，不经过代理 DNS。兼容性最好，但不防 DNS 污染。"
+    }
+
+private fun dnsProviderDetail(mode: DnsMode, provider: DnsProvider): String =
+    when (mode) {
+        DnsMode.FAKE_IP, DnsMode.DOH -> "DoH: ${provider.dohUrl}"
+        DnsMode.CUSTOM -> "DNS: ${provider.plainDns}"
+        DnsMode.SYSTEM -> ""
     }
 
 /** 解析 host:port 或 [ipv6]:port 格式，用于粘贴时自动拆分。 */

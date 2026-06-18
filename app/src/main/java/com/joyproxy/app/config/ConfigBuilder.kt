@@ -87,7 +87,7 @@ object ConfigBuilder {
                     add(
                         buildJsonObject {
                             put("tag", "dns-remote")
-                            put("address", settings.dohUrl)
+                            put("address", settings.dnsProvider.dohUrl)
                             put("detour", "proxy")
                         },
                     )
@@ -130,7 +130,7 @@ object ConfigBuilder {
                     add(
                         buildJsonObject {
                             put("tag", "dns-doh")
-                            put("address", settings.dohUrl)
+                            put("address", settings.dnsProvider.dohUrl)
                             put("detour", "proxy")
                         },
                     )
@@ -155,7 +155,7 @@ object ConfigBuilder {
                     add(
                         buildJsonObject {
                             put("tag", "dns-custom")
-                            put("address", "tcp://${settings.customDns}")
+                            put("address", "tcp://${settings.dnsProvider.plainDns}")
                             put("detour", "proxy")
                         },
                     )
@@ -184,6 +184,11 @@ object ConfigBuilder {
                             put("detour", "direct")
                         },
                     )
+                }
+                proxyHostDnsRule(settings)?.let { rule ->
+                    putJsonArray("rules") {
+                        add(rule)
+                    }
                 }
                 put("final", "dns-local")
                 put("strategy", "prefer_ipv4")

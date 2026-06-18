@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.joyproxy.app.config.DnsMode
+import com.joyproxy.app.config.DnsProvider
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
@@ -23,12 +24,28 @@ class SettingsRepository(private val context: Context) {
         val SCOPE = stringPreferencesKey("scope")
         val SELECTED_APPS = stringSetPreferencesKey("selected_apps")
         val DNS_MODE = stringPreferencesKey("dns_mode")
+        val DNS_PROVIDER = stringPreferencesKey("dns_provider")
         val CUSTOM_DNS = stringPreferencesKey("custom_dns")
         val DOH_URL = stringPreferencesKey("doh_url")
         val CONNECTED = booleanPreferencesKey("connected")
     }
 
     val settings: Flow<ProxySettings> = context.appPreferencesStore.data.map { prefs ->
+        val dnsProvider =
+            runCatching {
+                val stored = prefs[Keys.DNS_PROVIDER]
+                if (stored != null) {
+                    DnsProvider.fromId(stored)
+                } else {
+                    when (prefs[Keys.DNS_MODE]) {
+                        DnsMode.CUSTOM.name ->
+                            DnsProvider.fromPlainDns(prefs[Keys.CUSTOM_DNS] ?: DnsProvider.GOOGLE.plainDns)
+                        DnsMode.FAKE_IP.name, DnsMode.DOH.name ->
+                            DnsProvider.fromDohUrl(prefs[Keys.DOH_URL] ?: DnsProvider.GOOGLE.dohUrl)
+                        else -> DnsProvider.GOOGLE
+                    }
+                }
+            }.getOrDefault(DnsProvider.GOOGLE)
         ProxySettings(
             protocol = runCatching { ProxyProtocol.valueOf(prefs[Keys.PROTOCOL] ?: ProxyProtocol.SOCKS5.name) }
                 .getOrDefault(ProxyProtocol.SOCKS5),
@@ -39,10 +56,11 @@ class SettingsRepository(private val context: Context) {
             scope = runCatching { ProxyScope.valueOf(prefs[Keys.SCOPE] ?: ProxyScope.GLOBAL.name) }
                 .getOrDefault(ProxyScope.GLOBAL),
             selectedApps = prefs[Keys.SELECTED_APPS] ?: emptySet(),
-            dnsMode = runCatching { DnsMode.valueOf(prefs[Keys.DNS_MODE] ?: DnsMode.FAKE_IP.name) }
-                .getOrDefault(DnsMode.FAKE_IP),
-            customDns = prefs[Keys.CUSTOM_DNS] ?: "223.5.5.5",
-            dohUrl = prefs[Keys.DOH_URL] ?: "https://dns.alidns.com/dns-query",
+            dnsMode = runCatching { DnsMode.valueOf(prefs[Keys.DNS_MODE] ?: DnsMode.SYSTEM.name) }
+                .getOrDefault(DnsMode.SYSTEM),
+            dnsProvider = dnsProvider,
+            customDns = dnsProvider.plainDns,
+            dohUrl = dnsProvider.dohUrl,
             connected = prefs[Keys.CONNECTED] ?: false,
         )
     }
@@ -57,8 +75,9 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.SCOPE] = settings.scope.name
             prefs[Keys.SELECTED_APPS] = settings.selectedApps
             prefs[Keys.DNS_MODE] = settings.dnsMode.name
-            prefs[Keys.CUSTOM_DNS] = settings.customDns
-            prefs[Keys.DOH_URL] = settings.dohUrl
+            prefs[Keys.DNS_PROVIDER] = settings.dnsProvider.name
+            prefs[Keys.CUSTOM_DNS] = settings.dnsProvider.plainDns
+            prefs[Keys.DOH_URL] = settings.dnsProvider.dohUrl
             prefs[Keys.CONNECTED] = settings.connected
         }
     }

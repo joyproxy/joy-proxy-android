@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.joyproxy.app.config.DnsMode
+import com.joyproxy.app.config.DnsProvider
 import com.joyproxy.app.config.ProxyProtocol
 import com.joyproxy.app.config.ProxyScope
 import com.joyproxy.app.config.ProxySettings
@@ -132,9 +133,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         notifyReconnectIfConnected("DNS 模式")
     }
 
-    fun setCustomDns(dns: String) = update { it.copy(customDns = dns) }
-
-    fun setDohUrl(url: String) = update { it.copy(dohUrl = url) }
+    fun setDnsProvider(provider: DnsProvider) {
+        update {
+            it.copy(
+                dnsProvider = provider,
+                dohUrl = provider.dohUrl,
+                customDns = provider.plainDns,
+            )
+        }
+        notifyReconnectIfConnected("DNS 供应商")
+    }
 
     fun applySavedProxy(proxy: SavedProxy) {
         update {

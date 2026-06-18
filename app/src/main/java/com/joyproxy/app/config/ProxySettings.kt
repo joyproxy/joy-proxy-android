@@ -29,10 +29,15 @@ data class ProxySettings(
     val password: String = "",
     val scope: ProxyScope = ProxyScope.GLOBAL,
     val selectedApps: Set<String> = emptySet(),
-    val dnsMode: DnsMode = DnsMode.FAKE_IP,
-    val customDns: String = "223.5.5.5",
-    val dohUrl: String = "https://dns.alidns.com/dns-query",
+    val dnsMode: DnsMode = DnsMode.SYSTEM,
+    val dnsProvider: DnsProvider = DnsProvider.GOOGLE,
+    val customDns: String = DnsProvider.GOOGLE.plainDns,
+    val dohUrl: String = DnsProvider.GOOGLE.dohUrl,
     val connected: Boolean = false,
 ) {
     fun isValid(): Boolean = host.isNotBlank() && port in 1..65535
+
+    fun resolvedDohUrl(): String = dnsProvider.dohUrl
+
+    fun resolvedCustomDns(): String = dnsProvider.plainDns
 }
